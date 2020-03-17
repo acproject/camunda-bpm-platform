@@ -31,13 +31,14 @@
 
   ],
   "tags": [
-    {"name": "Deployment"},
-    {"name": "Engine"},
+    {"name": "Attachment"},
     {"name": "Comment"},
     {"name": "Condition"},
+    {"name": "Deployment"},
+    {"name": "Engine"},
     {"name": "Process instance"},
-    {"name": "Signal"},
     {"name": "Schema Log"},
+    {"name": "Signal"},
     {"name": "Version"}
   ],
   "paths": {
