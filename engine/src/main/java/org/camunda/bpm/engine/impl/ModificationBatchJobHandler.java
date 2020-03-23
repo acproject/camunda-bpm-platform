@@ -20,18 +20,17 @@ import java.util.List;
 
 import org.camunda.bpm.engine.batch.Batch;
 import org.camunda.bpm.engine.impl.batch.AbstractBatchJobHandler;
+import org.camunda.bpm.engine.impl.batch.BatchEntity;
 import org.camunda.bpm.engine.impl.batch.BatchJobConfiguration;
 import org.camunda.bpm.engine.impl.batch.BatchJobContext;
 import org.camunda.bpm.engine.impl.batch.BatchJobDeclaration;
-import org.camunda.bpm.engine.impl.context.Context;
+import org.camunda.bpm.engine.impl.batch.DeploymentMapping;
 import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.jobexecutor.JobDeclaration;
 import org.camunda.bpm.engine.impl.json.ModificationBatchConfigurationJsonConverter;
 import org.camunda.bpm.engine.impl.persistence.entity.ByteArrayEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.ExecutionEntity;
-import org.camunda.bpm.engine.impl.persistence.entity.JobEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.MessageEntity;
-import org.camunda.bpm.engine.impl.persistence.entity.ProcessDefinitionEntity;
 
 public class ModificationBatchJobHandler extends AbstractBatchJobHandler<ModificationBatchConfiguration>{
 
@@ -40,13 +39,6 @@ public class ModificationBatchJobHandler extends AbstractBatchJobHandler<Modific
   @Override
   public String getType() {
     return Batch.TYPE_PROCESS_INSTANCE_MODIFICATION;
-  }
-
-  @Override
-  protected void postProcessJob(ModificationBatchConfiguration configuration, JobEntity job) {
-    CommandContext commandContext = Context.getCommandContext();
-    ProcessDefinitionEntity processDefinitionEntity = commandContext.getProcessEngineConfiguration().getDeploymentCache().findDeployedProcessDefinitionById(configuration.getProcessDefinitionId());
-    job.setDeploymentId(processDefinitionEntity.getDeploymentId());
   }
 
   @Override
@@ -78,6 +70,16 @@ public class ModificationBatchJobHandler extends AbstractBatchJobHandler<Modific
   }
 
   @Override
+  protected boolean doCreateJobs(BatchEntity batch, ModificationBatchConfiguration configuration) {
+    List<DeploymentMapping> idMappings = configuration.getIdMappings();
+    if (idMappings == null || idMappings.isEmpty()) {
+      // create mapping for legacy seed jobs
+      createSingleDeploymentIdMappingForDefinition(configuration, configuration.getProcessDefinitionId());
+    }
+    return super.doCreateJobs(batch, configuration);
+  }
+
+  @Override
   public JobDeclaration<BatchJobContext, MessageEntity> getJobDeclaration() {
     return JOB_DECLARATION;
   }
@@ -97,12 +99,6 @@ public class ModificationBatchJobHandler extends AbstractBatchJobHandler<Modific
   @Override
   protected ModificationBatchConfigurationJsonConverter getJsonConverterInstance() {
     return ModificationBatchConfigurationJsonConverter.INSTANCE;
-  }
-
-  protected ProcessDefinitionEntity getProcessDefinition(CommandContext commandContext, String processDefinitionId) {
-    return commandContext.getProcessEngineConfiguration()
-        .getDeploymentCache()
-        .findDeployedProcessDefinitionById(processDefinitionId);
   }
 
 }

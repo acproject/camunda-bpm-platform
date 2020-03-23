@@ -17,18 +17,20 @@
 package org.camunda.bpm.engine.impl.cmd;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 
+import org.camunda.bpm.engine.BadUserRequestException;
 import org.camunda.bpm.engine.history.UserOperationLogEntry;
 import org.camunda.bpm.engine.impl.HistoricProcessInstanceQueryImpl;
 import org.camunda.bpm.engine.impl.ProcessInstanceQueryImpl;
 import org.camunda.bpm.engine.impl.UpdateProcessInstancesSuspensionStateBuilderImpl;
+import org.camunda.bpm.engine.impl.batch.BatchElementConfiguration;
 import org.camunda.bpm.engine.impl.interceptor.Command;
 import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.interceptor.CommandExecutor;
 import org.camunda.bpm.engine.impl.persistence.entity.PropertyChange;
+import org.camunda.bpm.engine.impl.util.EnsureUtil;
 
 public abstract class AbstractUpdateProcessInstancesSuspendStateCmd<T> implements Command<T> {
 
@@ -42,31 +44,38 @@ public abstract class AbstractUpdateProcessInstancesSuspendStateCmd<T> implement
     this.suspending = suspending;
   }
 
-  protected Collection<String> collectProcessInstanceIds() {
-    HashSet<String> allProcessInstanceIds = new HashSet<String>();
+  protected BatchElementConfiguration collectProcessInstanceIds(CommandContext commandContext) {
+    BatchElementConfiguration elementConfiguration = new BatchElementConfiguration();
 
     List<String> processInstanceIds = builder.getProcessInstanceIds();
-    if (processInstanceIds != null) {
-      allProcessInstanceIds.addAll(processInstanceIds);
+    EnsureUtil.ensureNotContainsNull(BadUserRequestException.class,
+        "Cannot be null.", "Process Instance ids", processInstanceIds);
+    if (processInstanceIds != null && !processInstanceIds.isEmpty()) {
+      ProcessInstanceQueryImpl query = new ProcessInstanceQueryImpl();
+      query.processInstanceIds(new HashSet<>(processInstanceIds));
+      commandContext.runWithoutAuthorization(() -> {
+        elementConfiguration.addDeploymentMappings(query.listDeploymentIdMappings(), processInstanceIds);
+        return null;
+      });
     }
 
     ProcessInstanceQueryImpl processInstanceQuery = (ProcessInstanceQueryImpl) builder.getProcessInstanceQuery();
     if( processInstanceQuery != null) {
-      allProcessInstanceIds.addAll(processInstanceQuery.listIds());
+      elementConfiguration.addDeploymentMappings(processInstanceQuery.listDeploymentIdMappings());
     }
 
     HistoricProcessInstanceQueryImpl historicProcessInstanceQuery = (HistoricProcessInstanceQueryImpl ) builder.getHistoricProcessInstanceQuery();
     if( historicProcessInstanceQuery != null) {
-      allProcessInstanceIds.addAll(historicProcessInstanceQuery.listIds());
+      elementConfiguration.addDeploymentMappings(historicProcessInstanceQuery.listDeploymentIdMappings());
     }
 
-    return allProcessInstanceIds;
+    return elementConfiguration;
   }
 
   protected void writeUserOperationLog(CommandContext commandContext, int numInstances,
                                        boolean async) {
 
-    List<PropertyChange> propertyChanges = new ArrayList<PropertyChange>();
+    List<PropertyChange> propertyChanges = new ArrayList<>();
     propertyChanges.add(new PropertyChange("nrOfInstances", null, numInstances));
     propertyChanges.add(new PropertyChange("async", null, async));
 

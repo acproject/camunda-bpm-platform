@@ -20,17 +20,16 @@ import java.util.List;
 
 import org.camunda.bpm.engine.batch.Batch;
 import org.camunda.bpm.engine.impl.batch.AbstractBatchJobHandler;
+import org.camunda.bpm.engine.impl.batch.BatchEntity;
 import org.camunda.bpm.engine.impl.batch.BatchJobConfiguration;
 import org.camunda.bpm.engine.impl.batch.BatchJobContext;
 import org.camunda.bpm.engine.impl.batch.BatchJobDeclaration;
-import org.camunda.bpm.engine.impl.context.Context;
+import org.camunda.bpm.engine.impl.batch.DeploymentMapping;
 import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.jobexecutor.JobDeclaration;
 import org.camunda.bpm.engine.impl.persistence.entity.ByteArrayEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.ExecutionEntity;
-import org.camunda.bpm.engine.impl.persistence.entity.JobEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.MessageEntity;
-import org.camunda.bpm.engine.impl.persistence.entity.ProcessDefinitionEntity;
 
 /**
  *
@@ -44,13 +43,6 @@ public class RestartProcessInstancesJobHandler extends AbstractBatchJobHandler<R
   @Override
   public String getType() {
     return Batch.TYPE_PROCESS_INSTANCE_RESTART;
-  }
-
-  @Override
-  protected void postProcessJob(RestartProcessInstancesBatchConfiguration configuration, JobEntity job) {
-    CommandContext commandContext = Context.getCommandContext();
-    ProcessDefinitionEntity processDefinitionEntity = commandContext.getProcessEngineConfiguration().getDeploymentCache().findDeployedProcessDefinitionById(configuration.getProcessDefinitionId());
-    job.setDeploymentId(processDefinitionEntity.getDeploymentId());
   }
 
   @Override
@@ -98,6 +90,16 @@ public class RestartProcessInstancesJobHandler extends AbstractBatchJobHandler<R
 
     commandContext.getByteArrayManager().delete(configurationEntity);
 
+  }
+
+  @Override
+  protected boolean doCreateJobs(BatchEntity batch, RestartProcessInstancesBatchConfiguration configuration) {
+    List<DeploymentMapping> idMappings = configuration.getIdMappings();
+    if (idMappings == null || idMappings.isEmpty()) {
+      // create mapping for legacy seed jobs
+      createSingleDeploymentIdMappingForDefinition(configuration, configuration.getProcessDefinitionId());
+    }
+    return super.doCreateJobs(batch, configuration);
   }
 
   @Override

@@ -18,19 +18,18 @@ package org.camunda.bpm.engine.impl.migration.batch;
 
 import org.camunda.bpm.engine.batch.Batch;
 import org.camunda.bpm.engine.impl.batch.AbstractBatchJobHandler;
+import org.camunda.bpm.engine.impl.batch.BatchEntity;
 import org.camunda.bpm.engine.impl.batch.BatchJobConfiguration;
 import org.camunda.bpm.engine.impl.batch.BatchJobContext;
 import org.camunda.bpm.engine.impl.batch.BatchJobDeclaration;
-import org.camunda.bpm.engine.impl.context.Context;
+import org.camunda.bpm.engine.impl.batch.DeploymentMapping;
 import org.camunda.bpm.engine.impl.interceptor.CommandContext;
 import org.camunda.bpm.engine.impl.jobexecutor.JobDeclaration;
 import org.camunda.bpm.engine.impl.json.MigrationBatchConfigurationJsonConverter;
 import org.camunda.bpm.engine.impl.migration.MigrationPlanExecutionBuilderImpl;
 import org.camunda.bpm.engine.impl.persistence.entity.ByteArrayEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.ExecutionEntity;
-import org.camunda.bpm.engine.impl.persistence.entity.JobEntity;
 import org.camunda.bpm.engine.impl.persistence.entity.MessageEntity;
-import org.camunda.bpm.engine.impl.persistence.entity.ProcessDefinitionEntity;
 import org.camunda.bpm.engine.migration.MigrationPlanExecutionBuilder;
 
 import java.util.List;
@@ -66,15 +65,6 @@ public class MigrationBatchJobHandler extends AbstractBatchJobHandler<MigrationB
   }
 
   @Override
-  protected void postProcessJob(MigrationBatchConfiguration configuration, JobEntity job) {
-    CommandContext commandContext = Context.getCommandContext();
-    String sourceProcessDefinitionId = configuration.getMigrationPlan().getSourceProcessDefinitionId();
-
-    ProcessDefinitionEntity processDefinition = getProcessDefinition(commandContext, sourceProcessDefinitionId);
-    job.setDeploymentId(processDefinition.getDeploymentId());
-  }
-
-  @Override
   public void execute(BatchJobConfiguration configuration, ExecutionEntity execution, CommandContext commandContext, String tenantId) {
     ByteArrayEntity configurationEntity = commandContext
         .getDbEntityManager()
@@ -101,10 +91,15 @@ public class MigrationBatchJobHandler extends AbstractBatchJobHandler<MigrationB
     commandContext.getByteArrayManager().delete(configurationEntity);
   }
 
-  protected ProcessDefinitionEntity getProcessDefinition(CommandContext commandContext, String processDefinitionId) {
-    return commandContext.getProcessEngineConfiguration()
-        .getDeploymentCache()
-        .findDeployedProcessDefinitionById(processDefinitionId);
+  @Override
+  protected boolean doCreateJobs(BatchEntity batch, MigrationBatchConfiguration configuration) {
+    List<DeploymentMapping> idMappings = configuration.getIdMappings();
+    if (idMappings == null || idMappings.isEmpty()) {
+      // create mapping for legacy seed jobs
+      createSingleDeploymentIdMappingForDefinition(configuration,
+          configuration.getMigrationPlan().getSourceProcessDefinitionId());
+    }
+    return super.doCreateJobs(batch, configuration);
   }
 
 }
